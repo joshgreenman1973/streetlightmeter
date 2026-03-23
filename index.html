@@ -1057,6 +1057,54 @@ html, body {
 .wt-skip:hover { color: var(--text-2); }
 
 /* How-to link on home screen */
+/* Toggle switch */
+#photo-toggle:checked + #photo-switch { background: var(--vc-coral); }
+#photo-toggle:checked ~ #photo-knob { transform: translateX(20px); }
+
+/* Calibration bar */
+.calibration-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  font-size: 12px;
+}
+.calibration-bar button {
+  background: none;
+  border: none;
+  color: var(--vc-coral);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.calibration-status {
+  color: var(--dim);
+  font-size: 11px;
+}
+
+/* Tracking input */
+#tracking-section {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+#tracking-input {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1.5px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  outline: none;
+  -webkit-appearance: none;
+  margin-top: 8px;
+}
+#tracking-input:focus { border-color: var(--vc-coral); }
+
 .how-to-link {
   background: none;
   border: none;
@@ -1091,7 +1139,7 @@ html, body {
     <div id="home-overlay">
       <div class="vc-badge">Vital City</div>
       <div id="home-title">StreetLightMeter</div>
-      <div id="home-subtitle">Measure street lighting with your phone's camera and report problems directly to NYC 311. <button class="how-to-link" onclick="showWalkthrough()">How it works</button></div>
+      <div id="home-subtitle">Measure street lighting with your phone's camera and report problems directly to NYC 311. <button class="how-to-link" onclick="showWalkthrough()">How it works</button> · <button class="how-to-link" onclick="calibratePrompt()">Calibrate</button></div>
       <div id="location-card">
         <div id="location-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
@@ -1199,6 +1247,29 @@ html, body {
       </div>
     </div>
 
+    <div class="detail-card" id="extras-card">
+      <div class="detail-card-title">Additional Details (Optional)</div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:13px;color:var(--text-2);display:block;margin-bottom:6px;">Pole number (if visible on the streetlight)</label>
+        <input type="text" id="pole-number-input" placeholder="e.g. 12345" autocomplete="off"
+          style="width:100%;padding:12px 14px;background:var(--surface-2);border:1.5px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text);font-family:var(--sans);font-size:15px;outline:none;-webkit-appearance:none;"
+          onfocus="this.style.borderColor='var(--vc-coral)'" onblur="this.style.borderColor='var(--border-2)'"
+          oninput="if(currentReading)currentReading.poleNumber=this.value">
+        <div style="font-size:11px;color:var(--dim);margin-top:4px;">Look for a stamped number on the pole, usually near eye level.</div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border);">
+        <div>
+          <div style="font-size:13px;font-weight:500;">Attach photo to report</div>
+          <div style="font-size:11px;color:var(--dim);margin-top:2px;">Saves the camera image with your reading</div>
+        </div>
+        <label style="position:relative;width:44px;height:24px;cursor:pointer;">
+          <input type="checkbox" id="photo-toggle" onchange="togglePhoto(this.checked)" style="opacity:0;width:0;height:0;">
+          <span id="photo-switch" style="position:absolute;inset:0;background:var(--border-2);border-radius:12px;transition:background 0.2s;"></span>
+          <span id="photo-knob" style="position:absolute;top:2px;left:2px;width:20px;height:20px;background:#fff;border-radius:50%;transition:transform 0.2s;"></span>
+        </label>
+      </div>
+    </div>
+
     <div class="detail-card" id="report-section">
       <div class="detail-card-title">Report to NYC 311</div>
       <div class="report-methods">
@@ -1244,6 +1315,19 @@ html, body {
           <button class="btn-secondary" onclick="copyTextMsg()">Copy Text</button>
           <a class="btn-secondary btn-text-311" id="text-link" href="#" style="text-decoration:none;">Open Messages</a>
         </div>
+      </div>
+    </div>
+
+    <div class="detail-card" id="tracking-section" style="display:none;">
+      <div class="detail-card-title">Track Your Report</div>
+      <div style="font-family:var(--serif);font-size:13px;font-weight:300;color:var(--text-2);line-height:1.5;margin-bottom:8px;">
+        After filing with 311, enter your service request number to track the repair status.
+      </div>
+      <input type="text" id="tracking-input" placeholder="e.g. C1-1-2345678901"
+        oninput="if(currentReading)currentReading.serviceRequestId=this.value"
+        onfocus="this.style.borderColor='var(--vc-coral)'" onblur="this.style.borderColor='var(--border-2)'">
+      <div style="font-size:11px;color:var(--dim);margin-top:6px;">
+        You'll get this number after calling, texting, or filing online.
       </div>
     </div>
 
@@ -1362,6 +1446,7 @@ let userAddress = '';
 let cameraStream = null;
 let captureTimeout = null;
 let currentReading = null;
+let currentPhoto = null;
 let selectedProblem = 'Insufficient Lighting';
 
 const STORAGE_KEY = 'dark-spots-reports';
@@ -1581,16 +1666,50 @@ function startCapture() {
   const label = document.getElementById('guide-label');
   btn.classList.add('measuring');
   reticle.classList.add('measuring');
-  label.textContent = 'Measuring…';
-  captureTimeout = setTimeout(() => {
-    doCapture();
-    btn.classList.remove('measuring');
-    reticle.classList.remove('measuring');
-    label.innerHTML = 'Point your camera straight ahead<br>and tap the button below';
-  }, 2000);
+
+  // Try to lock exposure for more accurate readings
+  tryLockExposure();
+
+  // Multi-frame capture: 5 frames over 3 seconds
+  const FRAME_COUNT = 5;
+  const INTERVAL_MS = 600;
+  const frames = [];
+  let frameIndex = 0;
+
+  label.textContent = `Measuring… (frame 1 of ${FRAME_COUNT})`;
+
+  const captureInterval = setInterval(() => {
+    const brightness = captureOneFrame();
+    frames.push(brightness);
+    frameIndex++;
+    label.textContent = `Measuring… (frame ${Math.min(frameIndex + 1, FRAME_COUNT)} of ${FRAME_COUNT})`;
+
+    if (frameIndex >= FRAME_COUNT) {
+      clearInterval(captureInterval);
+      btn.classList.remove('measuring');
+      reticle.classList.remove('measuring');
+      label.innerHTML = 'Point your camera straight ahead<br>and tap the button below';
+      finishCapture(frames);
+    }
+  }, INTERVAL_MS);
+
+  captureTimeout = captureInterval;
 }
 
-function doCapture() {
+async function tryLockExposure() {
+  if (!cameraStream) return;
+  const track = cameraStream.getVideoTracks()[0];
+  const caps = track.getCapabilities ? track.getCapabilities() : {};
+  try {
+    if (caps.exposureMode && caps.exposureMode.includes('manual')) {
+      await track.applyConstraints({ advanced: [{ exposureMode: 'manual' }] });
+    }
+  } catch (e) {
+    // Exposure lock not supported — continue with auto
+  }
+}
+
+function captureOneFrame() {
   const video = document.getElementById('camera-video');
   const canvas = document.getElementById('camera-canvas');
   canvas.width = video.videoWidth || 640;
@@ -1604,17 +1723,92 @@ function doCapture() {
   for (let i = 0; i < pixels.length; i += 4) {
     totalBrightness += (pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114);
   }
-  const avgBrightness = totalBrightness / pixelCount;
-  const estLux = brightnessToLux(avgBrightness);
+  return totalBrightness / pixelCount;
+}
+
+function finishCapture(frames) {
+  // Average brightness across all frames, excluding outliers
+  frames.sort((a, b) => a - b);
+  // Trim highest and lowest if we have enough frames
+  const trimmed = frames.length >= 5 ? frames.slice(1, -1) : frames;
+  const avgBrightness = trimmed.reduce((a, b) => a + b, 0) / trimmed.length;
+  const calibrationOffset = getCalibrationOffset();
+  const adjustedBrightness = Math.max(0, Math.min(255, avgBrightness + calibrationOffset));
+
+  const estLux = brightnessToLux(adjustedBrightness);
   const cls = classifyLux(estLux);
+
+  // Save the last frame as a photo for the report
+  const canvas = document.getElementById('camera-canvas');
+  let photoDataUrl = null;
+  try {
+    photoDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+  } catch (e) {}
+
   currentReading = {
-    lux: estLux, brightness: Math.round(avgBrightness),
+    lux: estLux,
+    brightness: Math.round(avgBrightness),
+    adjustedBrightness: Math.round(adjustedBrightness),
+    frames: frames.length,
+    calibrated: calibrationOffset !== 0,
     lat: userLat, lng: userLng, accuracy: userAccuracy,
     address: userAddress, timestamp: Date.now(),
-    problemType: selectedProblem, reported: false
+    problemType: selectedProblem, reported: false,
+    photo: null, // Set to photoDataUrl if user opts in
+    poleNumber: '',
+    serviceRequestId: ''
   };
+  currentPhoto = photoDataUrl;
+
   stopCamera();
   showResult(estLux, cls);
+}
+
+// ─── Calibration ───
+const CALIBRATION_KEY = 'slm-calibration';
+
+function getCalibrationOffset() {
+  const val = localStorage.getItem(CALIBRATION_KEY);
+  return val ? parseFloat(val) : 0;
+}
+
+function startCalibration() {
+  // User should be in a known well-lit room (~300 lux, typical indoor lighting)
+  // We expect brightness ~150 for that. Offset = expected - actual.
+  const brightness = captureOneFrame();
+  const EXPECTED_INDOOR = 150;
+  const offset = EXPECTED_INDOOR - brightness;
+  localStorage.setItem(CALIBRATION_KEY, offset.toString());
+  showToast(`Calibrated! Offset: ${offset > 0 ? '+' : ''}${Math.round(offset)}`);
+}
+
+function clearCalibration() {
+  localStorage.removeItem(CALIBRATION_KEY);
+  showToast('Calibration cleared');
+}
+
+async function calibratePrompt() {
+  const hasCalibration = getCalibrationOffset() !== 0;
+  const msg = hasCalibration
+    ? 'Your meter is calibrated. Recalibrate or clear it?\n\nTo calibrate: stand in a normally-lit indoor room and tap OK.'
+    : 'To calibrate, stand in a normally-lit indoor room (kitchen, office) and tap OK. The app will use this as a reference point.';
+
+  if (confirm(msg)) {
+    // Need camera briefly
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }
+      });
+      document.getElementById('camera-video').srcObject = cameraStream;
+      // Wait a moment for camera to stabilize
+      setTimeout(() => {
+        startCalibration();
+        stopCamera();
+      }, 1500);
+    } catch (e) {
+      showToast('Camera access needed to calibrate');
+    }
+  }
 }
 
 function showResult(lux, cls) {
@@ -1641,17 +1835,19 @@ function showResult(lux, cls) {
   document.getElementById('result-coords').textContent = userLat ? `${userLat.toFixed(5)}, ${userLng.toFixed(5)}` : 'No GPS';
   document.getElementById('result-accuracy').textContent = userAccuracy ? `±${userAccuracy}m` : 'N/A';
 
-  // Reset panels
+  // Reset panels and inputs
   document.getElementById('call-script').classList.remove('active');
   document.getElementById('text-compose').classList.remove('active');
+  document.getElementById('tracking-section').style.display = 'none';
+  document.getElementById('tracking-input').value = '';
+  document.getElementById('pole-number-input').value = '';
+  const photoToggle = document.getElementById('photo-toggle');
+  if (photoToggle) photoToggle.checked = false;
 
-  // If well-lit, hide reporting — no report needed
+  // Show/hide cards for well-lit readings — no report needed
   const isWellLit = lux > 30;
+  document.getElementById('extras-card').style.display = isWellLit ? 'none' : '';
   document.getElementById('report-section').style.display = isWellLit ? 'none' : '';
-  document.querySelector('#screen-result .btn-primary:last-of-type').textContent =
-    isWellLit ? 'Save Reading & Return to Map' : 'Save Reading & Return to Map';
-
-  // Show/hide the problem type card
   document.getElementById('problem-card').style.display = isWellLit ? 'none' : '';
 
   // Show a "no report needed" note for well-lit areas
@@ -1677,20 +1873,23 @@ function updateScripts() {
   const addr = userAddress || 'my current location';
   const lux = currentReading ? currentReading.lux : '?';
   const cls = currentReading ? classifyLux(currentReading.lux).label : '';
+  const pole = currentReading ? currentReading.poleNumber : '';
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   const coords = (userLat && userLng) ? `${userLat.toFixed(5)}, ${userLng.toFixed(5)}` : '';
   const device = navigator.userAgent.match(/iPhone|iPad|Android|Pixel/i)?.[0] || 'mobile device';
+  const poleStr = pole ? ` The pole number is <em>${pole}</em>.` : '';
+  const poleTxt = pole ? ` Pole #: ${pole}.` : '';
 
-  // Call script — includes reading details
+  // Call script — includes reading details + pole number
   document.getElementById('call-script-text').innerHTML =
-    `"I'd like to report a <em>street light condition</em>. The problem is <em>${selectedProblem.toLowerCase()}</em> at <em>${addr}</em>. ` +
+    `"I'd like to report a <em>street light condition</em>. The problem is <em>${selectedProblem.toLowerCase()}</em> at <em>${addr}</em>.${poleStr} ` +
     `I measured the light level with a phone meter and it reads <em>${lux} lux</em>, which is classified as <em>${cls.toLowerCase()}</em>. ` +
     `This was measured on <em>${dateStr}</em> at <em>${timeStr}</em>."`;
 
   // Text message — compact but includes all details
-  const textMsg = `Street light problem: ${selectedProblem}. Location: ${addr}. ` +
+  const textMsg = `Street light problem: ${selectedProblem}. Location: ${addr}.${poleTxt} ` +
     `Light reading: ${lux} lux (${cls}). ` +
     `Date/time: ${dateStr} ${timeStr}. ` +
     (coords ? `GPS: ${coords}. ` : '') +
@@ -1719,17 +1918,28 @@ function selectProblem(btn) {
 }
 
 // ─── Reporting ───
+function togglePhoto(on) {
+  if (currentReading) {
+    currentReading.photo = on ? currentPhoto : null;
+  }
+}
+
 function reportOnline() {
   if (currentReading) currentReading.reported = true;
+  document.getElementById('tracking-section').style.display = '';
   window.open('https://service.nyctmc.org/service4/main2.asp', '_blank');
 }
 function reportCall() {
   document.getElementById('call-script').classList.toggle('active');
   document.getElementById('text-compose').classList.remove('active');
+  if (currentReading) currentReading.reported = true;
+  document.getElementById('tracking-section').style.display = '';
 }
 function reportText() {
   document.getElementById('text-compose').classList.toggle('active');
   document.getElementById('call-script').classList.remove('active');
+  if (currentReading) currentReading.reported = true;
+  document.getElementById('tracking-section').style.display = '';
 }
 function copyScript() {
   navigator.clipboard.writeText(document.getElementById('call-script-text').innerText)
