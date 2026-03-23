@@ -1173,7 +1173,7 @@ html, body {
       </div>
     </div>
 
-    <div class="detail-card">
+    <div class="detail-card" id="problem-card">
       <div class="detail-card-title">What's the problem?</div>
       <div class="problem-types" id="problem-types">
         <button class="problem-type-btn selected" data-type="Insufficient Lighting" onclick="selectProblem(this)">
@@ -1644,6 +1644,32 @@ function showResult(lux, cls) {
   // Reset panels
   document.getElementById('call-script').classList.remove('active');
   document.getElementById('text-compose').classList.remove('active');
+
+  // If well-lit, hide reporting — no report needed
+  const isWellLit = lux > 30;
+  document.getElementById('report-section').style.display = isWellLit ? 'none' : '';
+  document.querySelector('#screen-result .btn-primary:last-of-type').textContent =
+    isWellLit ? 'Save Reading & Return to Map' : 'Save Reading & Return to Map';
+
+  // Show/hide the problem type card
+  document.getElementById('problem-card').style.display = isWellLit ? 'none' : '';
+
+  // Show a "no report needed" note for well-lit areas
+  let noReportEl = document.getElementById('no-report-note');
+  if (isWellLit) {
+    if (!noReportEl) {
+      noReportEl = document.createElement('div');
+      noReportEl.id = 'no-report-note';
+      noReportEl.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:14px;text-align:center;';
+      noReportEl.innerHTML = '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--safe);margin-bottom:10px;">No report needed</div>' +
+        '<div style="font-family:var(--serif);font-size:14px;font-weight:300;color:var(--text-2);line-height:1.6;">This area appears to have adequate lighting. Reports are only needed for areas classified as Dark, Dim, or Adequate.</div>';
+      document.getElementById('report-section').parentNode.insertBefore(noReportEl, document.getElementById('report-section'));
+    }
+    noReportEl.style.display = '';
+  } else if (noReportEl) {
+    noReportEl.style.display = 'none';
+  }
+
   updateScripts();
 }
 
