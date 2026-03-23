@@ -1,0 +1,1844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0c0c10">
+<title>StreetLightMeter — Vital City</title>
+<meta name="description" content="Measure street lighting with your phone and report problems to NYC 311. A Vital City tool.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Source+Serif+4:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* Vital City palette */
+  --vc-coral: #c94c24;
+  --vc-coral-glow: rgba(201, 76, 36, 0.25);
+  --vc-coral-dim: rgba(201, 76, 36, 0.12);
+  --vc-coral-hover: #a83d1c;
+
+  /* Dark mode adaptation */
+  --bg: #0c0c10;
+  --surface: #151519;
+  --surface-2: #1d1d24;
+  --surface-3: #26262f;
+  --surface-glass: rgba(21, 21, 25, 0.85);
+  --border: rgba(255,255,255,0.06);
+  --border-2: rgba(255,255,255,0.1);
+  --text: rgba(255,255,255,0.92);
+  --text-2: rgba(255,255,255,0.55);
+  --dim: rgba(255,255,255,0.3);
+
+  /* Semantic */
+  --danger: #e7466d;
+  --warn: #ff7c53;
+  --caution: #dde44c;
+  --safe: #4fbe5a;
+
+  /* Typography */
+  --display: 'Cormorant Garamond', Georgia, serif;
+  --serif: 'Source Serif 4', Georgia, serif;
+  --sans: 'Inter', -apple-system, sans-serif;
+
+  /* Spacing */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --radius: 14px;
+  --radius-sm: 10px;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--sans);
+  font-size: 15px;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ─── App Shell ─── */
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Ambient glow — warm coral atmosphere at top */
+#app::before {
+  content: '';
+  position: fixed;
+  top: -120px; left: -60px; right: -60px;
+  height: 300px;
+  background: radial-gradient(ellipse at 50% 0%, var(--vc-coral-glow) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.6;
+}
+
+.screen {
+  display: none;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+.screen.active { display: flex; }
+
+/* ─── Shared Typography ─── */
+.title-display {
+  font-family: var(--display);
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: -0.01em;
+}
+.title-serif {
+  font-family: var(--serif);
+  font-weight: 700;
+}
+.label-upper {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--vc-coral);
+}
+.body-serif {
+  font-family: var(--serif);
+  font-weight: 300;
+  line-height: 1.65;
+}
+
+/* ─── Buttons ─── */
+.btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 16px;
+  background: var(--vc-coral);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+  box-shadow: 0 4px 24px var(--vc-coral-glow), 0 0 0 0 transparent;
+  -webkit-appearance: none;
+  letter-spacing: 0.01em;
+}
+.btn-primary:active { transform: scale(0.97); background: var(--vc-coral-hover); }
+.btn-primary:disabled { opacity: 0.35; pointer-events: none; box-shadow: none; }
+.btn-primary svg { width: 18px; height: 18px; }
+
+.btn-secondary {
+  padding: 11px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s;
+  flex: 1;
+}
+.btn-secondary:active { background: var(--surface-3); }
+
+.btn-close {
+  width: 34px; height: 34px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-2);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.btn-close:active { background: var(--surface-3); }
+
+/* ─── Screen: Home ─── */
+#screen-home { position: relative; }
+
+#home-map {
+  flex: 1;
+  width: 100%;
+  opacity: 0.7;
+}
+
+#home-overlay {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: linear-gradient(transparent 0%, var(--bg) 35%);
+  padding: 80px 24px calc(24px + var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: var(--vc-coral-dim);
+  border: 1px solid rgba(201, 76, 36, 0.25);
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.1px;
+  color: var(--vc-coral);
+  width: fit-content;
+}
+
+#home-title {
+  font-family: var(--sans);
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+#home-subtitle {
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 300;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+
+#location-card {
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+#location-icon {
+  width: 42px; height: 42px;
+  background: var(--vc-coral-dim);
+  border: 1px solid rgba(201,76,36,0.2);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+#location-icon svg { width: 20px; height: 20px; color: var(--vc-coral); }
+#location-text { flex: 1; min-width: 0; }
+#location-address {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#location-coords {
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+#location-loading {
+  font-family: var(--serif);
+  font-size: 14px;
+  color: var(--text-2);
+  font-style: italic;
+}
+
+/* ─── Screen: Measure ─── */
+#screen-measure { background: #000; }
+
+#measure-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 10;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+#measure-top-bar h2 {
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+#camera-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+#camera-video { width: 100%; height: 100%; object-fit: cover; }
+#camera-canvas { display: none; }
+
+#camera-guide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* Reticle — thin crosshair with coral accent */
+.reticle {
+  width: 180px; height: 180px;
+  position: relative;
+}
+.reticle::before, .reticle::after {
+  content: '';
+  position: absolute;
+  background: rgba(255,255,255,0.2);
+}
+.reticle::before {
+  width: 1px; height: 100%;
+  left: 50%; top: 0;
+}
+.reticle::after {
+  height: 1px; width: 100%;
+  top: 50%; left: 0;
+}
+/* Corner brackets */
+.reticle-corner {
+  position: absolute;
+  width: 28px; height: 28px;
+  border-color: var(--vc-coral);
+  border-style: solid;
+  border-width: 0;
+}
+.reticle-corner.tl { top: 0; left: 0; border-top-width: 2px; border-left-width: 2px; border-radius: 4px 0 0 0; }
+.reticle-corner.tr { top: 0; right: 0; border-top-width: 2px; border-right-width: 2px; border-radius: 0 4px 0 0; }
+.reticle-corner.bl { bottom: 0; left: 0; border-bottom-width: 2px; border-left-width: 2px; border-radius: 0 0 0 4px; }
+.reticle-corner.br { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; border-radius: 0 0 4px 0; }
+
+.reticle.measuring .reticle-corner { border-color: #fff; }
+.reticle.measuring::before, .reticle.measuring::after { background: rgba(255,255,255,0.4); }
+
+.guide-label {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 300;
+  color: rgba(255,255,255,0.5);
+  margin-top: 20px;
+  text-align: center;
+  line-height: 1.6;
+  text-shadow: 0 1px 8px rgba(0,0,0,0.8);
+}
+
+#measure-bottom {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  padding: 24px 24px calc(28px + var(--safe-bottom));
+  background: linear-gradient(transparent, rgba(0,0,0,0.9));
+  display: flex;
+  justify-content: center;
+}
+
+.capture-btn {
+  width: 76px; height: 76px;
+  border-radius: 50%;
+  background: var(--vc-coral);
+  border: 3px solid rgba(255,255,255,0.25);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 30px var(--vc-coral-glow);
+}
+.capture-btn:active { transform: scale(0.9); }
+.capture-btn svg { width: 28px; height: 28px; color: #fff; }
+.capture-btn.measuring {
+  background: #fff;
+  box-shadow: 0 0 40px rgba(255,255,255,0.3);
+  animation: btn-pulse 1.2s ease-in-out infinite;
+}
+.capture-btn.measuring svg { color: var(--bg); }
+@keyframes btn-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+/* ─── Screen: Result ─── */
+#screen-result {
+  padding: 0 24px calc(24px + var(--safe-bottom));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#result-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 5;
+}
+#result-top-bar h2 {
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Hero lux display */
+#result-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0 24px;
+  gap: 14px;
+  position: relative;
+}
+/* Glow behind the badge */
+#result-hero::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  width: 160px; height: 160px;
+  border-radius: 50%;
+  filter: blur(50px);
+  opacity: 0.35;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.result-badge {
+  width: 110px; height: 110px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.result-badge-value {
+  font-family: var(--display);
+  font-size: 38px;
+  font-weight: 600;
+  line-height: 1;
+}
+.result-badge-unit {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-top: 2px;
+  opacity: 0.8;
+}
+.result-label {
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 600;
+  font-style: italic;
+  position: relative;
+  z-index: 1;
+}
+.result-note {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 300;
+  color: var(--text-2);
+  text-align: center;
+  line-height: 1.6;
+  max-width: 300px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Detail cards */
+.detail-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 14px;
+}
+.detail-card-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--vc-coral);
+  margin-bottom: 14px;
+}
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 8px 0;
+  font-size: 14px;
+}
+.detail-row + .detail-row { border-top: 1px solid var(--border); }
+.detail-row-label {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.detail-row-value {
+  font-family: var(--serif);
+  font-weight: 600;
+  text-align: right;
+  max-width: 60%;
+}
+
+/* Problem type selector */
+.problem-types { display: flex; flex-direction: column; gap: 6px; }
+.problem-type-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  background: var(--surface-2);
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text);
+  text-align: left;
+  width: 100%;
+}
+.problem-type-btn.selected {
+  border-color: var(--vc-coral);
+  background: var(--vc-coral-dim);
+}
+.problem-radio {
+  width: 18px; height: 18px;
+  border: 2px solid var(--dim);
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s;
+}
+.problem-type-btn.selected .problem-radio { border-color: var(--vc-coral); }
+.problem-radio::after {
+  content: '';
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--vc-coral);
+  transform: scale(0);
+  transition: transform 0.15s;
+}
+.problem-type-btn.selected .problem-radio::after { transform: scale(1); }
+
+/* Report methods */
+.report-methods { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.report-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-2);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  font-family: var(--sans);
+  text-align: left;
+  width: 100%;
+  background: var(--surface);
+  color: var(--text);
+}
+.report-btn:active { transform: scale(0.98); background: var(--surface-2); }
+.report-btn-icon {
+  width: 42px; height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 18px;
+}
+.report-btn-text { flex: 1; }
+.report-btn-title { font-size: 14px; font-weight: 600; }
+.report-btn-desc { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+.report-btn-arrow { color: var(--dim); font-size: 20px; font-weight: 300; }
+
+.report-btn.online .report-btn-icon { background: rgba(110,168,254,0.12); color: #6ea8fe; }
+.report-btn.call .report-btn-icon { background: rgba(79,190,90,0.12); color: var(--safe); }
+.report-btn.text .report-btn-icon { background: rgba(221,228,76,0.12); color: var(--caution); }
+
+/* Expandable script/text panels */
+.expand-panel {
+  display: none;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-top: 10px;
+  animation: panel-in 0.2s ease;
+}
+.expand-panel.active { display: block; }
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.expand-panel-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  margin-bottom: 12px;
+}
+.expand-panel-body {
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text);
+}
+.expand-panel-body em {
+  color: var(--vc-coral);
+  font-style: normal;
+  font-weight: 600;
+}
+.panel-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.btn-call { background: var(--safe); color: #000; border-color: transparent; font-weight: 700; }
+.btn-call:active { background: #3fa84a; }
+.btn-text-311 { background: var(--caution); color: #000; border-color: transparent; font-weight: 700; }
+.btn-text-311:active { background: #c8cc42; }
+
+.text-preview {
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  font-family: var(--serif);
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+
+/* ─── Toast ─── */
+#saved-toast {
+  display: none;
+  position: fixed;
+  top: 16px; left: 16px; right: 16px;
+  background: var(--safe);
+  color: #000;
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  font-weight: 700;
+  font-size: 14px;
+  text-align: center;
+  z-index: 200;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  animation: toast-in 0.3s ease;
+}
+@keyframes toast-in {
+  from { transform: translateY(-16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* ─── Screen: History ─── */
+#screen-history {
+  padding: 0 24px calc(24px + var(--safe-bottom));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+#history-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 5;
+}
+#history-top-bar h2 {
+  font-family: var(--serif);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.history-badge {
+  width: 48px; height: 48px;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.history-badge-unit { font-size: 8px; font-weight: 600; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; }
+.history-info { flex: 1; min-width: 0; }
+.history-address {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-meta {
+  font-size: 12px;
+  color: var(--dim);
+  margin-top: 4px;
+}
+.history-reported {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--safe);
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+}
+.empty-state-icon {
+  width: 64px; height: 64px;
+  margin: 0 auto 20px;
+  background: var(--surface);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  opacity: 0.5;
+}
+.empty-state-title {
+  font-family: var(--display);
+  font-size: 20px;
+  font-style: italic;
+  color: var(--text-2);
+  margin-bottom: 8px;
+}
+.empty-state-text {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 300;
+  color: var(--dim);
+  line-height: 1.6;
+}
+
+/* ─── Bottom Nav ─── */
+#bottom-nav {
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 6px 0 calc(6px + var(--safe-bottom));
+  flex-shrink: 0;
+}
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 0;
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s;
+  letter-spacing: 0.3px;
+}
+.nav-item.active { color: var(--vc-coral); }
+.nav-item svg { width: 22px; height: 22px; }
+
+/* ─── Permission Overlay ─── */
+#permission-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 100;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px;
+  text-align: center;
+}
+#permission-overlay.active { display: flex; }
+#permission-overlay h3 {
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 400;
+  font-style: italic;
+}
+#permission-overlay p {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 300;
+  color: var(--text-2);
+  line-height: 1.7;
+  max-width: 280px;
+}
+
+/* ─── MapLibre Overrides ─── */
+.maplibregl-ctrl-group {
+  background: var(--surface) !important;
+  border: 1px solid var(--border-2) !important;
+  border-radius: 10px !important;
+}
+.maplibregl-ctrl-group button {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+}
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(1); }
+.maplibregl-ctrl-attrib { background: transparent !important; }
+.maplibregl-ctrl-attrib a { color: var(--dim) !important; font-size: 10px !important; }
+
+.maplibregl-popup-content {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border-2) !important;
+  border-radius: 12px !important;
+  padding: 12px 14px !important;
+  font-family: var(--sans) !important;
+  font-size: 13px !important;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5) !important;
+}
+.maplibregl-popup-tip { border-top-color: var(--surface) !important; }
+
+/* ─── Desktop cap ─── */
+@media (min-width: 600px) {
+  #app {
+    max-width: 430px;
+    margin: 0 auto;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+  #app::before { display: none; }
+}
+
+/* ─── Password Gate ─── */
+#password-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 40px;
+  text-align: center;
+}
+#password-gate.hidden { display: none; }
+#password-gate .vc-badge { margin-bottom: 4px; }
+#password-gate h1 {
+  font-family: var(--sans);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+#password-gate p {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 300;
+  color: var(--text-2);
+  line-height: 1.6;
+  max-width: 280px;
+}
+#pw-input {
+  width: 100%;
+  max-width: 280px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 16px;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s;
+  -webkit-appearance: none;
+}
+#pw-input:focus { border-color: var(--vc-coral); }
+#pw-input.error {
+  border-color: var(--danger);
+  animation: pw-shake 0.4s ease;
+}
+@keyframes pw-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+#pw-error {
+  font-size: 13px;
+  color: var(--danger);
+  height: 18px;
+}
+
+/* ─── Walkthrough Overlay ─── */
+#walkthrough {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: var(--bg);
+  flex-direction: column;
+  overflow: hidden;
+}
+#walkthrough.active { display: flex; }
+
+.wt-slides {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+.wt-slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 32px;
+  text-align: center;
+  gap: 20px;
+  opacity: 0;
+  transform: translateX(40px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  pointer-events: none;
+}
+.wt-slide.active {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+.wt-slide.exiting {
+  opacity: 0;
+  transform: translateX(-40px);
+}
+
+.wt-icon {
+  width: 80px; height: 80px;
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+}
+.wt-step-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--vc-coral);
+}
+.wt-title {
+  font-family: var(--sans);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.wt-body {
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 300;
+  color: var(--text-2);
+  line-height: 1.7;
+  max-width: 320px;
+}
+.wt-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--vc-coral-dim);
+  border: 1px solid rgba(201,76,36,0.2);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--vc-coral);
+}
+
+.wt-bottom {
+  padding: 20px 32px calc(24px + var(--safe-bottom));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.wt-dots {
+  display: flex;
+  gap: 6px;
+}
+.wt-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--dim);
+  transition: background 0.2s, width 0.2s;
+}
+.wt-dot.active {
+  background: var(--vc-coral);
+  width: 18px;
+  border-radius: 3px;
+}
+.wt-next {
+  padding: 12px 28px;
+  background: var(--vc-coral);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.wt-next:active { background: var(--vc-coral-hover); }
+.wt-skip {
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-family: var(--sans);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 8px 0;
+}
+.wt-skip:hover { color: var(--text-2); }
+
+/* How-to link on home screen */
+.how-to-link {
+  background: none;
+  border: none;
+  color: var(--vc-coral);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+</style>
+</head>
+<body>
+
+<!-- Password Gate -->
+<div id="password-gate">
+  <div class="vc-badge">Vital City</div>
+  <h1>StreetLightMeter</h1>
+  <p>This tool is in preview. Enter the password to continue.</p>
+  <input type="password" id="pw-input" placeholder="Password" autocomplete="off" onkeydown="if(event.key==='Enter')checkPassword()">
+  <div id="pw-error"></div>
+  <button class="btn-primary" style="max-width:280px;" onclick="checkPassword()">Enter</button>
+</div>
+
+<div id="app" style="display:none;">
+
+  <!-- ─── Screen: Home ─── -->
+  <div class="screen active" id="screen-home">
+    <div id="home-map"></div>
+    <div id="home-overlay">
+      <div class="vc-badge">Vital City</div>
+      <div id="home-title">StreetLightMeter</div>
+      <div id="home-subtitle">Measure street lighting with your phone's camera and report problems directly to NYC 311. <button class="how-to-link" onclick="showWalkthrough()">How it works</button></div>
+      <div id="location-card">
+        <div id="location-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        </div>
+        <div id="location-text">
+          <div id="location-loading">Finding your location…</div>
+          <div id="location-address" style="display:none;"></div>
+          <div id="location-coords" style="display:none;"></div>
+        </div>
+      </div>
+      <button class="btn-primary" id="btn-start-measure" disabled onclick="goToMeasure()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+        Measure Light Here
+      </button>
+    </div>
+  </div>
+
+  <!-- ─── Screen: Measure ─── -->
+  <div class="screen" id="screen-measure">
+    <div id="measure-top-bar">
+      <h2>Measure</h2>
+      <button class="btn-close" onclick="cancelMeasure()">×</button>
+    </div>
+    <div id="camera-area">
+      <video id="camera-video" autoplay playsinline muted></video>
+      <canvas id="camera-canvas"></canvas>
+      <div id="camera-guide">
+        <div class="reticle" id="reticle">
+          <div class="reticle-corner tl"></div>
+          <div class="reticle-corner tr"></div>
+          <div class="reticle-corner bl"></div>
+          <div class="reticle-corner br"></div>
+        </div>
+        <div class="guide-label" id="guide-label">Point your camera outward<br>and tap the button below</div>
+      </div>
+    </div>
+    <div id="measure-bottom">
+      <button class="capture-btn" id="capture-btn" onclick="startCapture()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/></svg>
+      </button>
+    </div>
+    <div id="permission-overlay">
+      <svg style="width:52px;height:52px;color:var(--vc-coral);opacity:0.7;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      <h3>Camera Access</h3>
+      <p>To measure light levels, the app needs your camera. The image is analyzed on your phone and never uploaded.</p>
+      <button class="btn-primary" style="max-width:220px;" onclick="requestCamera()">Allow Camera</button>
+    </div>
+  </div>
+
+  <!-- ─── Screen: Result ─── -->
+  <div class="screen" id="screen-result">
+    <div id="result-top-bar">
+      <h2>Your Reading</h2>
+      <button class="btn-close" onclick="goHome()">×</button>
+    </div>
+
+    <div id="result-hero">
+      <div class="result-badge" id="result-badge">
+        <div class="result-badge-value" id="result-value">0</div>
+        <div class="result-badge-unit">est. lux</div>
+      </div>
+      <div class="result-label" id="result-label">Measuring…</div>
+      <div class="result-note" id="result-note"></div>
+    </div>
+
+    <div class="detail-card">
+      <div class="detail-card-title">Location</div>
+      <div class="detail-row">
+        <span class="detail-row-label">Address</span>
+        <span class="detail-row-value" id="result-address">…</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-row-label">Coordinates</span>
+        <span class="detail-row-value" id="result-coords">…</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-row-label">GPS accuracy</span>
+        <span class="detail-row-value" id="result-accuracy">…</span>
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <div class="detail-card-title">What's the problem?</div>
+      <div class="problem-types" id="problem-types">
+        <button class="problem-type-btn selected" data-type="Insufficient Lighting" onclick="selectProblem(this)">
+          <div class="problem-radio"></div>
+          Insufficient lighting in this area
+        </button>
+        <button class="problem-type-btn" data-type="Street Light Out" onclick="selectProblem(this)">
+          <div class="problem-radio"></div>
+          Street light out
+        </button>
+        <button class="problem-type-btn" data-type="Street Light Dim" onclick="selectProblem(this)">
+          <div class="problem-radio"></div>
+          Street light dim
+        </button>
+        <button class="problem-type-btn" data-type="Street Light Flickering" onclick="selectProblem(this)">
+          <div class="problem-radio"></div>
+          Flickering or cycling on and off
+        </button>
+        <button class="problem-type-btn" data-type="Damaged Pole" onclick="selectProblem(this)">
+          <div class="problem-radio"></div>
+          Leaning or damaged pole
+        </button>
+      </div>
+    </div>
+
+    <div class="detail-card" id="report-section">
+      <div class="detail-card-title">Report to NYC 311</div>
+      <div class="report-methods">
+        <button class="report-btn online" onclick="reportOnline()">
+          <div class="report-btn-icon">🌐</div>
+          <div class="report-btn-text">
+            <div class="report-btn-title">File Online</div>
+            <div class="report-btn-desc">Opens DOT Street Lighting Repair Form</div>
+          </div>
+          <div class="report-btn-arrow">›</div>
+        </button>
+        <button class="report-btn call" onclick="reportCall()">
+          <div class="report-btn-icon">📞</div>
+          <div class="report-btn-text">
+            <div class="report-btn-title">Call 311</div>
+            <div class="report-btn-desc">Get a script of exactly what to say</div>
+          </div>
+          <div class="report-btn-arrow">›</div>
+        </button>
+        <button class="report-btn text" onclick="reportText()">
+          <div class="report-btn-icon">💬</div>
+          <div class="report-btn-text">
+            <div class="report-btn-title">Text 311</div>
+            <div class="report-btn-desc">Send to 311-692 with your report details</div>
+          </div>
+          <div class="report-btn-arrow">›</div>
+        </button>
+      </div>
+
+      <div class="expand-panel" id="call-script">
+        <div class="expand-panel-title" style="color:var(--safe);">What to say</div>
+        <div class="expand-panel-body" id="call-script-text"></div>
+        <div class="panel-actions">
+          <button class="btn-secondary" onclick="copyScript()">Copy Script</button>
+          <a class="btn-secondary btn-call" href="tel:311" style="text-decoration:none;">Call 311 Now</a>
+        </div>
+      </div>
+
+      <div class="expand-panel" id="text-compose">
+        <div class="expand-panel-title" style="color:var(--caution);">Message to 311-692</div>
+        <div class="text-preview" id="text-compose-body"></div>
+        <div class="panel-actions">
+          <button class="btn-secondary" onclick="copyTextMsg()">Copy Text</button>
+          <a class="btn-secondary btn-text-311" id="text-link" href="#" style="text-decoration:none;">Open Messages</a>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-primary" style="margin-top:4px; margin-bottom:24px;" onclick="saveAndReturn()">
+      Save Reading & Return to Map
+    </button>
+  </div>
+
+  <!-- ─── Screen: History ─── -->
+  <div class="screen" id="screen-history">
+    <div id="history-top-bar">
+      <h2>Your Reports</h2>
+      <button class="btn-close" onclick="showScreen('screen-home')">×</button>
+    </div>
+    <div id="history-list"></div>
+  </div>
+
+  <!-- ─── Bottom Nav ─── -->
+  <div id="bottom-nav">
+    <button class="nav-item active" data-screen="screen-home" onclick="navTo(this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      Map
+    </button>
+    <button class="nav-item" data-screen="screen-measure" onclick="goToMeasure()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+      Measure
+    </button>
+    <button class="nav-item" data-screen="screen-history" onclick="navTo(this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Reports
+    </button>
+  </div>
+</div>
+
+<!-- ─── Walkthrough ─── -->
+<div id="walkthrough">
+  <div class="wt-slides">
+    <div class="wt-slide active" data-slide="0">
+      <div class="wt-icon">📱</div>
+      <div class="wt-step-label">Step 1 of 4</div>
+      <div class="wt-title">Go outside at night</div>
+      <div class="wt-body">Walk to a street or sidewalk where you think the lighting is poor. StreetLightMeter works best after dark — that's when lighting problems are visible.</div>
+    </div>
+    <div class="wt-slide" data-slide="1">
+      <div class="wt-icon">🔦</div>
+      <div class="wt-step-label">Step 2 of 4</div>
+      <div class="wt-title">Hold your phone at chest height</div>
+      <div class="wt-body">Point the rear camera (the one on the back of your phone) outward, facing the street — not at the sky, not at the ground. Hold it roughly at chest height, like you're taking a photo of the block ahead of you.</div>
+      <div class="wt-tip">Works with any phone — iPhone or Android</div>
+    </div>
+    <div class="wt-slide" data-slide="2">
+      <div class="wt-icon">📷</div>
+      <div class="wt-step-label">Step 3 of 4</div>
+      <div class="wt-title">Tap the button and hold steady</div>
+      <div class="wt-body">Tap "Measure Light Here," then allow camera access if prompted. You'll see a live view from your camera. Tap the capture button and hold still for two seconds while the app analyzes the light.</div>
+    </div>
+    <div class="wt-slide" data-slide="3">
+      <div class="wt-icon">📋</div>
+      <div class="wt-step-label">Step 4 of 4</div>
+      <div class="wt-title">Report it to 311</div>
+      <div class="wt-body">The app will show your reading and tell you if the area is dark, dim, or adequate. Pick the problem type, then file a report online, call 311, or text 311. Your reading is saved on the map so others can see it too.</div>
+      <div class="wt-tip">Your camera image is never uploaded</div>
+    </div>
+  </div>
+  <div class="wt-bottom">
+    <button class="wt-skip" onclick="closeWalkthrough()">Skip</button>
+    <div class="wt-dots">
+      <div class="wt-dot active" data-dot="0"></div>
+      <div class="wt-dot" data-dot="1"></div>
+      <div class="wt-dot" data-dot="2"></div>
+      <div class="wt-dot" data-dot="3"></div>
+    </div>
+    <button class="wt-next" id="wt-next-btn" onclick="nextSlide()">Next</button>
+  </div>
+</div>
+
+<div id="saved-toast">Reading saved!</div>
+
+<script>
+// ─── Password Gate ───
+const PW_HASH = '2736601cdf6599be3b82779e542e0e62c083cea16795f68c181609f8801a3a79';
+const PW_SESSION_KEY = 'slm-authed';
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function checkPassword() {
+  const input = document.getElementById('pw-input');
+  const hash = await sha256(input.value);
+  if (hash === PW_HASH) {
+    sessionStorage.setItem(PW_SESSION_KEY, '1');
+    unlockApp();
+  } else {
+    input.classList.add('error');
+    document.getElementById('pw-error').textContent = 'Incorrect password';
+    setTimeout(() => input.classList.remove('error'), 500);
+  }
+}
+
+function unlockApp() {
+  document.getElementById('password-gate').classList.add('hidden');
+  document.getElementById('app').style.display = 'flex';
+}
+
+// Auto-unlock if already authed this session
+if (sessionStorage.getItem(PW_SESSION_KEY)) {
+  document.addEventListener('DOMContentLoaded', unlockApp);
+}
+
+// ─── State ───
+let homeMap;
+let userLat = null, userLng = null, userAccuracy = null;
+let userAddress = '';
+let cameraStream = null;
+let captureTimeout = null;
+let currentReading = null;
+let selectedProblem = 'Insufficient Lighting';
+
+const STORAGE_KEY = 'dark-spots-reports';
+// Set this after deploying the Cloudflare Worker:
+// e.g. 'https://dark-spots-api.your-subdomain.workers.dev'
+const API_BASE = null;
+
+// ─── Utils ───
+function classifyLux(lux) {
+  if (lux <= 5) return { label: 'Dark', color: '#e7466d', desc: 'This area is dangerously under-lit and should be reported.' };
+  if (lux <= 15) return { label: 'Dim', color: '#ff7c53', desc: 'Below recommended levels for pedestrian safety.' };
+  if (lux <= 30) return { label: 'Adequate', color: '#dde44c', desc: 'Meets minimum lighting standards.' };
+  return { label: 'Well Lit', color: '#4fbe5a', desc: 'This area appears to have sufficient lighting.' };
+}
+
+function brightnessToLux(brightness) {
+  if (brightness < 10) return Math.round(brightness * 0.2 * 10) / 10;
+  if (brightness < 40) return Math.round((0.2 + (brightness - 10) / 30 * 8) * 10) / 10;
+  if (brightness < 100) return Math.round((8 + (brightness - 40) / 60 * 22) * 10) / 10;
+  if (brightness < 180) return Math.round((30 + (brightness - 100) / 80 * 70) * 10) / 10;
+  return Math.round((100 + (brightness - 180) / 75 * 200) * 10) / 10;
+}
+
+function getReports() {
+  return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+}
+function saveReportToStorage(report) {
+  const reports = getReports();
+  reports.push(report);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(reports));
+}
+
+// Duplicate detection — block reports within 50m of an existing one from the same device
+function hasDuplicateNearby(lat, lng) {
+  const reports = getReports();
+  const RADIUS_M = 50;
+  for (const r of reports) {
+    if (!r.lat || !r.lng) continue;
+    const dist = haversineMeters(lat, lng, r.lat, r.lng);
+    if (dist < RADIUS_M) return true;
+  }
+  return false;
+}
+
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ─── Reverse Geocoding ───
+async function reverseGeocode(lat, lng) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1&zoom=18`);
+    const data = await res.json();
+    if (data.address) {
+      const a = data.address;
+      const parts = [];
+      if (a.house_number && a.road) parts.push(`${a.house_number} ${a.road}`);
+      else if (a.road) parts.push(a.road);
+      if (a.neighbourhood) parts.push(a.neighbourhood);
+      if (a.suburb || a.borough) parts.push(a.suburb || a.borough);
+      return parts.join(', ') || data.display_name.split(',').slice(0, 3).join(',');
+    }
+    return data.display_name ? data.display_name.split(',').slice(0, 3).join(',').trim() : '';
+  } catch (e) {
+    console.warn('Geocode error:', e);
+    return '';
+  }
+}
+
+// ─── Navigation ───
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.classList.toggle('active', n.dataset.screen === id);
+  });
+  const hideNav = (id === 'screen-measure');
+  document.getElementById('bottom-nav').style.display = hideNav ? 'none' : 'flex';
+}
+
+function navTo(btn) {
+  const screen = btn.dataset.screen;
+  if (screen === 'screen-history') renderHistory();
+  showScreen(screen);
+}
+
+function goHome() {
+  showScreen('screen-home');
+  stopCamera();
+}
+
+// ─── Home Map ───
+function initHomeMap() {
+  homeMap = new maplibregl.Map({
+    container: 'home-map',
+    style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+    center: [-73.94, 40.71],
+    zoom: 11,
+    attributionControl: false,
+    dragRotate: false,
+    pitchWithRotate: false
+  });
+  homeMap.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+  homeMap.on('load', async () => {
+    addReadingsToMap();
+    // Also load shared readings from the API
+    if (API_BASE) {
+      try {
+        const res = await fetch(`${API_BASE}/readings/geojson`);
+        const geojson = await res.json();
+        homeMap.addSource('shared-reports', { type: 'geojson', data: geojson });
+        homeMap.addLayer({
+          id: 'shared-circles',
+          type: 'circle',
+          source: 'shared-reports',
+          paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 4, 16, 8],
+            'circle-color': ['get', 'color'],
+            'circle-stroke-width': 1,
+            'circle-stroke-color': 'rgba(0,0,0,0.4)',
+            'circle-opacity': 0.6
+          }
+        });
+      } catch (e) { console.warn('Could not load shared readings:', e); }
+    }
+  });
+}
+
+function addReadingsToMap() {
+  const reports = getReports();
+  if (!homeMap.getSource('reports')) {
+    homeMap.addSource('reports', { type: 'geojson', data: reportsToGeoJSON(reports) });
+    homeMap.addLayer({
+      id: 'reports-circles',
+      type: 'circle',
+      source: 'reports',
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 5, 16, 10],
+        'circle-color': ['get', 'color'],
+        'circle-stroke-width': 2,
+        'circle-stroke-color': 'rgba(0,0,0,0.5)',
+        'circle-opacity': 0.9
+      }
+    });
+  } else {
+    homeMap.getSource('reports').setData(reportsToGeoJSON(reports));
+  }
+}
+
+function reportsToGeoJSON(reports) {
+  return {
+    type: 'FeatureCollection',
+    features: reports.map(r => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [r.lng, r.lat] },
+      properties: { color: classifyLux(r.lux).color, lux: r.lux }
+    }))
+  };
+}
+
+// ─── Geolocation ───
+function getLocation() {
+  if (!navigator.geolocation) {
+    document.getElementById('location-loading').textContent = 'Geolocation not supported';
+    return;
+  }
+  navigator.geolocation.watchPosition(
+    async (pos) => {
+      userLat = pos.coords.latitude;
+      userLng = pos.coords.longitude;
+      userAccuracy = Math.round(pos.coords.accuracy);
+      document.getElementById('location-loading').style.display = 'none';
+      document.getElementById('location-coords').style.display = 'block';
+      document.getElementById('location-coords').textContent = `${userLat.toFixed(5)}, ${userLng.toFixed(5)}  ·  ±${userAccuracy}m`;
+      document.getElementById('btn-start-measure').disabled = false;
+      const addr = await reverseGeocode(userLat, userLng);
+      if (addr) {
+        userAddress = addr;
+        document.getElementById('location-address').style.display = 'block';
+        document.getElementById('location-address').textContent = addr;
+      }
+      if (homeMap) homeMap.flyTo({ center: [userLng, userLat], zoom: 15, duration: 1500 });
+    },
+    () => {
+      document.getElementById('location-loading').textContent = 'Location unavailable — enable GPS';
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+  );
+}
+
+// ─── Camera / Measure ───
+function goToMeasure() {
+  showScreen('screen-measure');
+  requestCamera();
+}
+
+async function requestCamera() {
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }
+    });
+    document.getElementById('camera-video').srcObject = cameraStream;
+    document.getElementById('permission-overlay').classList.remove('active');
+  } catch (e) {
+    document.getElementById('permission-overlay').classList.add('active');
+  }
+}
+
+function startCapture() {
+  const btn = document.getElementById('capture-btn');
+  const reticle = document.getElementById('reticle');
+  const label = document.getElementById('guide-label');
+  btn.classList.add('measuring');
+  reticle.classList.add('measuring');
+  label.textContent = 'Measuring…';
+  captureTimeout = setTimeout(() => {
+    doCapture();
+    btn.classList.remove('measuring');
+    reticle.classList.remove('measuring');
+    label.innerHTML = 'Point your camera outward<br>and tap the button below';
+  }, 2000);
+}
+
+function doCapture() {
+  const video = document.getElementById('camera-video');
+  const canvas = document.getElementById('camera-canvas');
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const pixels = imageData.data;
+  let totalBrightness = 0;
+  const pixelCount = pixels.length / 4;
+  for (let i = 0; i < pixels.length; i += 4) {
+    totalBrightness += (pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114);
+  }
+  const avgBrightness = totalBrightness / pixelCount;
+  const estLux = brightnessToLux(avgBrightness);
+  const cls = classifyLux(estLux);
+  currentReading = {
+    lux: estLux, brightness: Math.round(avgBrightness),
+    lat: userLat, lng: userLng, accuracy: userAccuracy,
+    address: userAddress, timestamp: Date.now(),
+    problemType: selectedProblem, reported: false
+  };
+  stopCamera();
+  showResult(estLux, cls);
+}
+
+function showResult(lux, cls) {
+  showScreen('screen-result');
+  document.getElementById('screen-result').scrollTop = 0;
+
+  // Badge and glow
+  const badge = document.getElementById('result-badge');
+  badge.style.background = cls.color;
+  document.getElementById('result-hero').style.setProperty('--glow-color', cls.color);
+  const heroEl = document.getElementById('result-hero');
+  heroEl.style.cssText = `--glow: ${cls.color}`;
+  // Set glow via the pseudo-element approach
+  const glowStyle = document.getElementById('glow-style') || document.createElement('style');
+  glowStyle.id = 'glow-style';
+  glowStyle.textContent = `#result-hero::before { background: ${cls.color}; }`;
+  document.head.appendChild(glowStyle);
+
+  document.getElementById('result-value').textContent = lux;
+  document.getElementById('result-label').textContent = cls.label;
+  document.getElementById('result-label').style.color = cls.color;
+  document.getElementById('result-note').textContent = cls.desc;
+  document.getElementById('result-address').textContent = userAddress || 'Unknown';
+  document.getElementById('result-coords').textContent = userLat ? `${userLat.toFixed(5)}, ${userLng.toFixed(5)}` : 'No GPS';
+  document.getElementById('result-accuracy').textContent = userAccuracy ? `±${userAccuracy}m` : 'N/A';
+
+  // Reset panels
+  document.getElementById('call-script').classList.remove('active');
+  document.getElementById('text-compose').classList.remove('active');
+  updateScripts();
+}
+
+function updateScripts() {
+  const addr = userAddress || 'my current location';
+  const lux = currentReading ? currentReading.lux : '?';
+  const cls = currentReading ? classifyLux(currentReading.lux).label : '';
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const coords = (userLat && userLng) ? `${userLat.toFixed(5)}, ${userLng.toFixed(5)}` : '';
+  const device = navigator.userAgent.match(/iPhone|iPad|Android|Pixel/i)?.[0] || 'mobile device';
+
+  // Call script — includes reading details
+  document.getElementById('call-script-text').innerHTML =
+    `"I'd like to report a <em>street light condition</em>. The problem is <em>${selectedProblem.toLowerCase()}</em> at <em>${addr}</em>. ` +
+    `I measured the light level with a phone meter and it reads <em>${lux} lux</em>, which is classified as <em>${cls.toLowerCase()}</em>. ` +
+    `This was measured on <em>${dateStr}</em> at <em>${timeStr}</em>."`;
+
+  // Text message — compact but includes all details
+  const textMsg = `Street light problem: ${selectedProblem}. Location: ${addr}. ` +
+    `Light reading: ${lux} lux (${cls}). ` +
+    `Date/time: ${dateStr} ${timeStr}. ` +
+    (coords ? `GPS: ${coords}. ` : '') +
+    `Device: ${device}. Measured via StreetLightMeter.`;
+  document.getElementById('text-compose-body').textContent = textMsg;
+  document.getElementById('text-link').href = `sms:311692&body=${encodeURIComponent(textMsg)}`;
+}
+
+function cancelMeasure() {
+  stopCamera();
+  if (captureTimeout) { clearTimeout(captureTimeout); captureTimeout = null; }
+  showScreen('screen-home');
+}
+
+function stopCamera() {
+  if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+}
+
+// ─── Problem Selection ───
+function selectProblem(btn) {
+  document.querySelectorAll('.problem-type-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  selectedProblem = btn.dataset.type;
+  if (currentReading) currentReading.problemType = selectedProblem;
+  updateScripts();
+}
+
+// ─── Reporting ───
+function reportOnline() {
+  if (currentReading) currentReading.reported = true;
+  window.open('https://service.nyctmc.org/service4/main2.asp', '_blank');
+}
+function reportCall() {
+  document.getElementById('call-script').classList.toggle('active');
+  document.getElementById('text-compose').classList.remove('active');
+}
+function reportText() {
+  document.getElementById('text-compose').classList.toggle('active');
+  document.getElementById('call-script').classList.remove('active');
+}
+function copyScript() {
+  navigator.clipboard.writeText(document.getElementById('call-script-text').innerText)
+    .then(() => showToast('Script copied!')).catch(() => {});
+}
+function copyTextMsg() {
+  navigator.clipboard.writeText(document.getElementById('text-compose-body').innerText)
+    .then(() => showToast('Message copied!')).catch(() => {});
+}
+function showToast(msg) {
+  const toast = document.getElementById('saved-toast');
+  toast.textContent = msg;
+  toast.style.display = 'block';
+  setTimeout(() => { toast.style.display = 'none'; }, 2500);
+}
+
+// ─── Save Reading ───
+async function saveAndReturn() {
+  if (currentReading) {
+    // Local duplicate check — prevent reporting the same spot repeatedly
+    if (currentReading.lat && currentReading.lng && hasDuplicateNearby(currentReading.lat, currentReading.lng)) {
+      showToast("You've already reported this spot");
+      currentReading = null;
+      showScreen('screen-home');
+      return;
+    }
+
+    saveReportToStorage(currentReading);
+    addReadingsToMap();
+
+    // POST to shared API
+    if (API_BASE) {
+      try {
+        const res = await fetch(`${API_BASE}/readings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentReading)
+        });
+        const data = await res.json();
+        if (data.duplicate) {
+          showToast('Already reported by another user nearby');
+        }
+      } catch (e) {
+        console.warn('API post error (saved locally):', e);
+      }
+    }
+
+    currentReading = null;
+    showToast('Reading saved!');
+  }
+  showScreen('screen-home');
+}
+
+// ─── History ───
+function renderHistory() {
+  const reports = getReports();
+  const container = document.getElementById('history-list');
+  if (reports.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">💡</div>
+        <div class="empty-state-title">No reports yet</div>
+        <div class="empty-state-text">Take a reading and report a dark street to get started.</div>
+      </div>`;
+    return;
+  }
+  container.innerHTML = reports.slice().reverse().map(r => {
+    const cls = classifyLux(r.lux);
+    const time = new Date(r.timestamp);
+    const timeStr = time.toLocaleDateString() + ' ' + time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `
+      <div class="history-item">
+        <div class="history-badge" style="background:${cls.color};">
+          ${r.lux}
+          <div class="history-badge-unit">lux</div>
+        </div>
+        <div class="history-info">
+          <div class="history-address">${r.address || 'Unknown location'}</div>
+          <div class="history-meta">${cls.label} · ${r.problemType} · ${timeStr}</div>
+          ${r.reported ? '<div class="history-reported">✓ Reported to 311</div>' : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ─── Walkthrough ───
+let currentSlide = 0;
+const WALKTHROUGH_KEY = 'slm-walkthrough-seen';
+
+function showWalkthrough() {
+  currentSlide = 0;
+  updateSlides();
+  document.getElementById('walkthrough').classList.add('active');
+}
+
+function closeWalkthrough() {
+  document.getElementById('walkthrough').classList.remove('active');
+  localStorage.setItem(WALKTHROUGH_KEY, '1');
+}
+
+function nextSlide() {
+  const slides = document.querySelectorAll('.wt-slide');
+  if (currentSlide >= slides.length - 1) {
+    closeWalkthrough();
+    return;
+  }
+  // Exit current
+  slides[currentSlide].classList.add('exiting');
+  slides[currentSlide].classList.remove('active');
+  currentSlide++;
+  updateSlides();
+  // Clean up exiting class after transition
+  setTimeout(() => {
+    document.querySelectorAll('.wt-slide.exiting').forEach(s => s.classList.remove('exiting'));
+  }, 400);
+}
+
+function updateSlides() {
+  const slides = document.querySelectorAll('.wt-slide');
+  const dots = document.querySelectorAll('.wt-dot');
+  slides[currentSlide].classList.add('active');
+  dots.forEach((d, i) => d.classList.toggle('active', i === currentSlide));
+  const btn = document.getElementById('wt-next-btn');
+  btn.textContent = currentSlide === slides.length - 1 ? 'Get Started' : 'Next';
+}
+
+// ─── Init ───
+document.addEventListener('DOMContentLoaded', () => {
+  initHomeMap();
+  getLocation();
+  // Show walkthrough on first visit
+  if (!localStorage.getItem(WALKTHROUGH_KEY)) {
+    showWalkthrough();
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+name = "dark-spots-api"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+[[kv_namespaces]]
+binding = "READINGS"
+id = ""
+preview_id = ""
+
+[vars]
+CORS_ORIGIN = "*"
