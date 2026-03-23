@@ -6,6 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0c0c10">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-title" content="StreetLight">
 <title>StreetLightMeter — Vital City</title>
 <meta name="description" content="Measure street lighting with your phone and report problems to NYC 311. A Vital City tool.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1105,6 +1108,11 @@ html, body {
 }
 #tracking-input:focus { border-color: var(--vc-coral); }
 
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
 .how-to-link {
   background: none;
   border: none;
@@ -2064,6 +2072,71 @@ function updateSlides() {
   dots.forEach((d, i) => d.classList.toggle('active', i === currentSlide));
   const btn = document.getElementById('wt-next-btn');
   btn.textContent = currentSlide === slides.length - 1 ? 'Get Started' : 'Next';
+}
+
+// ─── PWA Install Prompt ───
+let deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  showInstallBanner();
+});
+
+function showInstallBanner() {
+  // Only show if not already installed / dismissed
+  if (sessionStorage.getItem('slm-install-dismissed')) return;
+  if (window.matchMedia('(display-mode: standalone)').matches) return;
+  if (navigator.standalone) return; // iOS standalone
+
+  let banner = document.getElementById('install-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'install-banner';
+    banner.style.cssText = `
+      position: fixed; bottom: 80px; left: 16px; right: 16px;
+      background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: var(--radius); padding: 16px;
+      display: flex; align-items: center; gap: 14px;
+      z-index: 9999; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      animation: slideUp 0.3s ease-out;
+    `;
+    banner.innerHTML = `
+      <div style="flex:1;">
+        <div style="font-family:var(--sans);font-weight:700;font-size:14px;color:var(--text);margin-bottom:4px;">Install StreetLightMeter</div>
+        <div style="font-family:var(--sans);font-size:12px;color:var(--text-2);line-height:1.4;">Add to your home screen for quick access and offline use.</div>
+      </div>
+      <button onclick="installPWA()" style="background:var(--vc-coral);color:#fff;border:none;border-radius:var(--radius-sm);padding:10px 16px;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">Install</button>
+      <button onclick="dismissInstall()" style="background:none;border:none;color:var(--dim);font-size:20px;cursor:pointer;padding:4px;">×</button>
+    `;
+    document.body.appendChild(banner);
+  }
+  banner.style.display = 'flex';
+}
+
+async function installPWA() {
+  const banner = document.getElementById('install-banner');
+  if (banner) banner.style.display = 'none';
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    const result = await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+  }
+}
+
+function dismissInstall() {
+  const banner = document.getElementById('install-banner');
+  if (banner) banner.style.display = 'none';
+  sessionStorage.setItem('slm-install-dismissed', '1');
+}
+
+// ─── Service Worker Registration ───
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => console.log('SW registered:', reg.scope))
+      .catch(err => console.warn('SW registration failed:', err));
+  });
 }
 
 // ─── Init ───

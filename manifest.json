@@ -1,0 +1,27 @@
+{
+  "name": "StreetLightMeter",
+  "short_name": "StreetLight",
+  "description": "Measure street lighting with your phone\u2019s camera and report problems to NYC 311.",
+  "start_url": "/streetlightmeter/",
+  "scope": "/streetlightmeter/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c0c10",
+  "theme_color": "#0c0c10",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "government"],
+  "lang": "en-US"
+}
